@@ -1,0 +1,156 @@
+Mini JavaScript: Assignment 11
+
+Your assignment is to implement a subset of the JavaScript object model,
+based on the base code destributed in this zip file.
+
+## Some changes to the distributed code:
+
+Added "undefined" as a literal, which refers to Undefined value.
+Allow functions to have empty parameter lists (zero or one arguments).
+
+Changed to have implicitly mutable vars, with implicit dereferencing.
+   var x = 3; x = x + 1; x
+this evluates as if it where to 
+   var x = mutable 3; x = @x + 1; @x
+"mutable" and "@" have been removed from the grammar.
+Note that function argument variables are NOT mutable.
+
+Added a "try catch" statement that catches errors
+
+Here are your tasks:
+
+## Change Concrete Syntax
+
+Add syntax for Records:
+    var parent = { z: 3 };
+    var r = { a: 3, 
+              b: 5, 
+              m: function() { this.p() + 3 }, 
+              p: function() { 2 },
+              prototype: parent}
+
+Add access syntax for Fields: 
+	r.a + r.b * r.m()
+If the field is not defined in the record, then look in the prototype.
+If the field is not found anywhere, then return Undefined value
+
+    r.z 
+
+## Change Abstract Syntax
+
+Extend the abstract syntax:
+   data Exp   = ... 
+              | Record [(String, Exp)]
+              | Field  Exp String
+   data Value = ... 
+              | RecordV Env
+
+## Convert Records into RecordVs
+
+You can use this helper function to implement
+the evaluation of your Object expressions, assuming that
+your object values have constructors RecordV.
+
+evalObj :: [(String, Exp)] -> Env -> CheckedStateful Value
+evalObj [] env = return (RecordV [])
+evalObj ((xstr, xexp) : xs) env = do
+  vexp <- evaluate xexp env
+  RecordV newXS <- evalObj(xs) env
+  return (RecordV ((xstr, vexp) : newXS))
+
+## Variable "this" 
+
+Define special behavior for the Var "this":
+
+Special syntax case for calling a function on a record:
+        r.m()
+This must set "this" in the context of the execution of "m".
+Otherwise "this" will be undefined.
+
+Add "this" variable and implement it in functions. It should be automatically 
+bound when calling  r.m().  "this" should be equal to the value of "r" 
+inside the execution of "m".
+
+To implement method call, "o.m(arg)", add another pattern to evaluate:
+
+evaluate (Call (Field obj method) arg) env = do
+  ov <- evaluate obj env
+  av <- evaluate arg env
+  -- make sure that's its an object
+  fun <- lookupField ov method
+  -- make sure that fun is a closure
+  -- call the function, adding ("this",ov) to the environment
+
+lookupField :: Value -> String -> CheckedStateful Value
+  -- define recursive lookup that handles "prototype" field 
+  -- note that it should use dereference(val) to ensure that
+  -- the value is not an address
+
+## "prototype" Field
+
+Support a "prototype" field. The prototype is used to find fields of a 
+record that are not defined. Prototype should be "undefined" if it is not given.
+
+	var p = { a: 10, 
+		  m: function() { this.a + 99 }
+		};
+	var c = { a: 1,
+		  prototype: p 
+		};
+	c.m() -->returns 100
+	p.m() -->returns 109
+
+## Test cases
+
+As a test, you should be able to implement these objects:
+
+  var Counter = function(init) {
+        var count = init;
+        {
+           inc: function() { count = this.get() + 1 },
+           get: function() { count }
+        }
+   };
+   var BigCounter = function(init) {
+        {
+           prototype: Counter(init),
+           get: function() { 2 * this.prototype.get() }
+        }
+   };
+   var c = Counter(1);
+   var bc = BigCounter(1);
+   c.inc(); c.inc();
+   bc.inc(); bc.inc();
+   { c: c.get(), bc: bc.get() }
+
+# Good (RecordV [("c", IntV 3), ("bc", IntV 14)])
+
+var x = 3;
+var y = x + 2;
+x = y * 2;
+x
+
+# Good (IntV 10)
+
+var f = function(a) { a + this.g(a) };
+var g = function(b) { b * b };
+var r = { f:f, g:g };
+r.f(10)
+
+# Good (IntV 110)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

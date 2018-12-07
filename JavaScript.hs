@@ -1,4 +1,4 @@
-module JavaSript where
+module JavaScript where
 
 import Prelude hiding (LT, GT, EQ, id)
 import Control.Monad
@@ -31,7 +31,7 @@ data Exp = Literal   Value
          | Assign    Exp Exp   -- new
          | TryCatch  Exp Exp
          | Record    [(String, Exp)]
-         | Field     String Exp
+         | Field     Exp String
   deriving (Eq, Show)
   
 type Env = [(String, Value)]
@@ -63,6 +63,31 @@ evalObj ((xstr, xexp) : xs) env = do
   vexp <- evaluate xexp env
   RecordV newXS <- evalObj(xs) env
   return (RecordV ((xstr, vexp) : newXS))
+
+doLookup :: Value -> String -> Value
+doLookup (RecordV ((id, exp) : fields)) str = do
+  case id of
+    str -> exp
+    _   -> case fields of
+      (x:xs) -> doLookup (RecordV (x:xs)) str
+      []     -> Undefined
+    
+  
+-- checkAddress :: Value -> Value
+-- checkAddress v = case v of
+--   AddressV i -> readMemory i
+--   _          -> v
+
+
+lookupField :: Value -> String -> CheckedStateful Value
+lookupField val str = do
+  case doLookup val str of
+    IntV i -> return (IntV i)
+    BoolV b -> return (BoolV b)
+    ClosureV x body env -> return (ClosureV x body env)
+    Undefined -> case doLookup val "prototype" of
+      RecordV r -> return $ doLookup (RecordV r) str
+      Undefined -> return Undefined
 
 evaluate :: Exp -> Env -> CheckedStateful Value
 -- basic operations
@@ -112,22 +137,23 @@ evaluate (Call fun arg) env = do
       evaluate body newEnv
     _ -> myError ("Expected function but found " ++ show funv)
 
-evaluate (Call (Field obj method)) env = do
-  funv <- evaluate fun ("this", obj) : env
-  case funv of
-    ClosureV x body closeEnv -> do
-      argv <- evaluate arg env
-      let newEnv = (x, argv) : closeEnv
-      evaluate body newEnv
-    _ -> myError ("Expected function but found " ++ show funv)
-    
+evaluate (Field obj f) env = do
+  ov <- evaluate obj env
+  case ov of
+    RecordV r -> lookupField ov f
+    _ -> myError ("Expected object but found " ++ show ov)
+
 evaluate (Call (Field obj method) arg) env = do
   ov <- evaluate obj env
   av <- evaluate arg env
-  -- make sure that's its an object
-  fun <- lookupField ov method
-  -- make sure that fun is a closure
-  -- call the function, adding ("this",ov) to the environment
+  case ov of
+    RecordV r -> do
+      fun <- lookupField ov method
+      case fun of
+        ClosureV x body closeEnv -> let newEnv = ("this", ov) : (x, av) : env in
+          evaluate body newEnv
+        _ -> myError ("Expected function but found " ++ show fun)
+    _ -> myError ("Expected object but found " ++ show ov)
 
 -- mutation operations
 evaluate (Seq a b) env = do

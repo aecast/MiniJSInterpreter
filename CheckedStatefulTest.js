@@ -61,3 +61,38 @@ try {
 x
 
 # Good (IntV 2)
+
+var Counter = function(init) {
+    var count = init;
+    {
+       inc: function() { count = this.get() + 1 },
+       get: function() { count }
+    }
+};
+var BigCounter = function(init) {
+    {
+       prototype: Counter(init),
+       get: function() { 2 * this.prototype.get() }
+    }
+};
+var c = Counter(1);
+var bc = BigCounter(1);
+c.inc(); c.inc();
+bc.inc(); bc.inc();
+{ c: c.get(), bc: bc.get() }
+
+# Good (RecordV [("c", IntV 3), ("bc", IntV 14)])
+
+var x = 3;
+var y = x + 2;
+x = y * 2;
+x
+
+# Good (IntV 10)
+
+var f = function(a) { a + this.g(a) };
+var g = function(b) { b * b };
+var r = { f:f, g:g };
+r.f(10)
+
+# Good (IntV 110)
